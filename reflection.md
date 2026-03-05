@@ -1,59 +1,45 @@
-# 💭 Reflection: Game Glitch Investigator
-
-Answer each question in 3 to 5 sentences. Be specific and honest about what actually happened while you worked. This is about your process, not trying to sound perfect.
+# Reflection: Game Glitch Investigator
 
 ## 1. What was broken when you started?
 
-When I first ran the game, it appeared to work visually — the Streamlit UI loaded, difficulty settings showed up, and I could type a guess. However, several bugs made the game unplayable.
+The game looked fine at first glance — the UI loaded, I could type a number and hit submit. But it was pretty much unwinnable. The hints were completely backwards. I guessed 80 when the secret was around 30, and it told me to go higher. I thought I was misreading it, so I guessed even higher and kept getting the same message. Eventually I opened the debug panel and realized the hints were just inverted — too high said go higher, too low said go lower.
 
-- **Bug 1 — Inverted hints:** The hint logic was completely backwards. When my guess was too high (e.g., 80 against a secret of 30), the game told me "📈 Go HIGHER!" instead of "Go LOWER!" This made it impossible to navigate toward the secret number. I expected a guess of 80 against secret 30 to say "Go Lower," but instead it encouraged me to guess even higher.
+The second thing I caught was that the secret number seemed to be changing. I'd open the debug info, note the secret, submit a guess, and the secret would be different on the next turn. Turned out the code was converting the secret to a string on every even attempt, so the comparison was happening alphabetically instead of numerically. Like "9" > "50" comes out true alphabetically because "9" > "5", which is obviously wrong.
 
-- **Bug 2 — Secret number corrupted on even attempts:** On every even-numbered attempt, `app.py` silently converted the integer secret to a string (`secret = str(st.session_state.secret)`) before passing it to `check_guess`. This caused Python to fall into the `TypeError` branch and compare numbers as strings using lexicographic order — so `"9" > "50"` evaluated to `True` because `"9" > "5"`. I expected the comparison to always be numeric; instead the behavior changed unpredictably every other turn.
-
-- **Bug 3 — Hard difficulty was easier than Normal:** The `get_range_for_difficulty` function returned `1–50` for Hard and `1–100` for Normal, meaning Hard mode was actually *less* difficult. I expected Hard to widen the range and make guessing harder; instead switching to Hard gave me a smaller target range.
-
-- **Bonus Bug — logic_utils.py was all stubs:** Every function in `logic_utils.py` raised `NotImplementedError`. The real implementations were duplicated inside `app.py`, so all existing tests failed immediately when imported from `logic_utils`.
+The third one was the difficulty settings. I switched to Hard expecting it to be harder, but the range was 1–50, which is actually easier than Normal's 1–100. That was clearly a copy-paste mistake in the original code.
 
 ---
 
 ## 2. How did you use AI as a teammate?
 
-I used Claude (via Claude Code) as my AI pair programmer throughout this project.
+I used AI to help me trace through the bugs once I had a rough idea of where things were going wrong.
 
-**Correct suggestion — identifying the string coercion bug:**
-When I described the symptom ("the game gives wrong hints on every second guess but right hints on odd-numbered guesses"), Claude immediately identified lines 158–161 in `app.py` where the secret was being cast to `str` on even attempts. It explained that string comparison is lexicographic, which is why `check_guess(9, "50")` returned "Too High" (because `"9" > "5"` alphabetically). I verified this by reading those lines directly in the code and confirming the if/else on `attempt_number % 2 == 0`. The fix — always passing the integer secret — made the behavior consistent across all attempts.
+For the string coercion bug, I described the symptom — hints being correct on odd attempts but wrong on even ones — and the AI pointed me straight to the lines where the secret was getting cast to a string. It explained why that breaks numeric comparison, which confirmed what I suspected. That suggestion was spot on and saved me from digging through all the session state logic manually.
 
-**Incorrect/misleading suggestion — Hard difficulty range:**
-When I asked the AI what the Hard difficulty range *should* be, it initially suggested `1–50` might be intentional as a "trick hard mode" where the smaller range could be argued as deceptively easy. This framing was misleading — the README clearly says Hard should make the game harder, and a range half the size of Normal contradicts that. I rejected this reasoning, checked the README's intent ("make the hints harder"), and set Hard to `1–200` instead, which genuinely increases difficulty.
+Where the AI wasn't helpful was when I asked whether the Hard difficulty range was intentional. It tried to argue that maybe 1–50 was a "trick" hard mode where the smaller range is deceptively easy. That made no sense given how the game is described, so I ignored it and just set Hard to 1–200, which is what it should've been all along. That was a good reminder that AI will sometimes defend broken code instead of just admitting it's wrong.
 
 ---
 
 ## 3. Debugging and testing your fixes
 
-I verified each fix in two ways: automated pytest tests and manual play in the Streamlit app.
+After fixing the inverted hints, I wrote two tests specifically to catch that — one checking that a guess of 1 against a secret of 100 returns "Too Low", and one checking that 100 against 1 returns "Too High". Before the fix those would've returned the opposite. Running pytest confirmed they passed after the fix.
 
-For the inverted hints bug, I wrote `test_hints_not_inverted_low` and `test_hints_not_inverted_high` in `test_game_logic.py`. These confirmed that `check_guess(1, 100)` returns `"Too Low"` and `check_guess(100, 1)` returns `"Too High"` — the opposite of what the original code produced. Before the fix, these tests failed; after moving the corrected logic into `logic_utils.py`, both passed.
+For the string coercion issue, I wrote a test using `check_guess(9, 50)` — because 9 < 50 numerically but "9" > "5" alphabetically. That specific case would have returned "Too High" in the broken code. After moving the logic into `logic_utils.py` with proper integer comparison, it correctly returned "Too Low".
 
-For the string coercion bug, I added `test_no_string_coercion` which specifically checks that `check_guess(9, 50)` returns `"Too Low"` — a case where lexicographic comparison would have returned the wrong answer. Running `pytest` confirmed this test passes with the fixed integer comparison.
-
-I also ran `python -m streamlit run app.py` and played several full games on Easy difficulty. I could now win by following the hints, the attempts counter correctly started at 0, and switching to Hard mode showed the wider 1–200 range in the sidebar. All 20 tests passed: `20 passed in 0.03s`.
+I also just played the game a bunch after each fix to make sure it felt right. The hints now actually lead you to the answer, the score goes down when you guess wrong, and switching to Hard gives you a much bigger range to work with.
 
 ---
 
 ## 4. What did you learn about Streamlit and state?
 
-In the original app, the secret number appeared to change because Streamlit **reruns the entire script from top to bottom** every time a button is clicked or any input changes. Without `st.session_state`, `random.randint(low, high)` would be called again on every rerun, generating a fresh secret each time.
+The secret number changing every turn threw me off at first. I didn't realize Streamlit reruns the entire script from scratch every time you interact with anything — click a button, type in a box, doesn't matter. So any variable you define at the top of the file just gets reset on every interaction.
 
-Streamlit "reruns" are like refreshing a web page — the script re-executes completely, so any variable assigned at module level gets reset to its initial value. `st.session_state` is a dictionary that persists across these reruns, letting you store values that should survive a page refresh (like the secret number, attempt counter, and score).
-
-The fix that gave the game a stable secret was the `if "secret" not in st.session_state:` guard — it only assigns a new random number the very first time the script runs, and leaves it alone on every subsequent rerun. This is the standard Streamlit pattern for any value that must persist across interactions.
+`st.session_state` is what keeps values alive across those reruns. The fix was wrapping the secret assignment in an `if "secret" not in st.session_state:` check so it only generates a new number the very first time, and leaves it alone after that. Same thing for attempts, score, and history. Once I understood that reruns were the root cause, everything else made more sense.
 
 ---
 
 ## 5. Looking ahead: your developer habits
 
-One habit I want to reuse is **writing regression tests immediately after finding a bug**, before writing the fix. Describing the exact broken behavior as a failing test (e.g., `assert check_guess(9, 50) == "Too Low"`) gave me a clear, runnable definition of "fixed." It also caught when I accidentally re-introduced a bug during refactoring.
+The most useful thing I did was write the tests before fully fixing the bugs — or at least right after confirming the broken behavior. Having a failing test that described exactly what was wrong made it easy to know when the fix actually worked, and it caught a couple of cases where I thought I'd fixed something but hadn't quite.
 
-Next time I work with AI on a coding task, I would give it smaller, more targeted prompts rather than asking it to fix everything at once. When I described multiple bugs together, the AI's responses were harder to evaluate. Isolating one bug per conversation kept the context focused and the suggestions easier to verify against the code.
-
-This project changed how I think about AI-generated code: I used to assume AI code either works or has obvious errors. Now I see that AI bugs are often subtle logic inversions or type-coercion issues that *look* correct at a glance but break in specific conditions — exactly the kind of bug that requires a human to read carefully and test systematically, not just run once and assume it's fine.
+I'd also be more careful about accepting AI suggestions on logic-heavy code. For straightforward stuff like "find where this variable is assigned," it's great. But when I asked it to evaluate whether a design decision was intentional, it just kind of rationalized the broken behavior instead of questioning it. Going forward I'd ask it to explain code rather than judge whether it's correct — that seems to be where it's actually reliable.

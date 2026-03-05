@@ -1,12 +1,8 @@
 import random
 import streamlit as st
 
-# FIX: Refactored all game logic into logic_utils.py using AI assistance.
-# app.py now only handles UI concerns.
 from logic_utils import get_range_for_difficulty, parse_guess, check_guess, update_score
 
-# Maps outcome strings to display messages shown to the player.
-# FIX: Messages were inverted in original code — "Too High" said "Go HIGHER!"
 OUTCOME_MESSAGES = {
     "Win": "🎉 Correct!",
     "Too High": "📉 Go LOWER!",
@@ -38,9 +34,8 @@ low, high = get_range_for_difficulty(difficulty)
 st.sidebar.caption(f"Range: {low} to {high}")
 st.sidebar.caption(f"Attempts allowed: {attempt_limit}")
 
-# FIX: When difficulty changes, regenerate the secret within the new range and
-# reset the game. Without this guard the secret stays from the old difficulty
-# (e.g. a secret of 15 from Easy would persist after switching to Hard 1-200).
+# Reset the game when the player switches difficulty so the secret stays
+# within the new range and the attempt/score counters start fresh.
 if "difficulty" not in st.session_state:
     st.session_state.difficulty = difficulty
 
@@ -55,9 +50,6 @@ if st.session_state.difficulty != difficulty:
 if "secret" not in st.session_state:
     st.session_state.secret = random.randint(low, high)
 
-# FIX: Attempts counter was initialised at 1 so the first guess was treated as
-# attempt 2, making "Attempts left" show one fewer than correct and throwing off
-# the scoring formula. Start at 0 so the first submit becomes attempt 1.
 if "attempts" not in st.session_state:
     st.session_state.attempts = 0
 
@@ -72,7 +64,6 @@ if "history" not in st.session_state:
 
 st.subheader("Make a guess")
 
-# FIX: Info box was hardcoded to "1 and 100" regardless of difficulty.
 st.info(
     f"Guess a number between {low} and {high}. "
     f"Attempts left: {attempt_limit - st.session_state.attempts}"
@@ -101,7 +92,7 @@ with col3:
 if new_game:
     st.session_state.attempts = 0
     st.session_state.secret = random.randint(low, high)
-    st.session_state.status = "playing"   # FIX: was never reset, so game stayed in won/lost state
+    st.session_state.status = "playing"
     st.session_state.history = []
     st.success("New game started.")
     st.rerun()
@@ -117,16 +108,12 @@ if submit:
     ok, guess_int, err = parse_guess(raw_guess)
 
     if not ok:
-        # FIX: Don't count invalid inputs as attempts — only real guesses cost a turn.
         st.session_state.history.append(raw_guess)
         st.error(err)
     else:
         st.session_state.attempts += 1
         st.session_state.history.append(guess_int)
 
-        # FIX: Original code converted secret to a string on every even attempt,
-        # causing lexicographic comparison ("9" > "50" because "9" > "5").
-        # Now always pass the integer secret directly.
         outcome = check_guess(guess_int, st.session_state.secret)
         message = OUTCOME_MESSAGES[outcome]
 
