@@ -2,11 +2,13 @@
 
 ## 1. What was broken when you started?
 
-The game looked fine at first glance — the UI loaded, I could type a number and hit submit. But it was pretty much unwinnable. The hints were completely backwards. I guessed 80 when the secret was around 30, and it told me to go higher. I thought I was misreading it, so I guessed even higher and kept getting the same message. Eventually I opened the debug panel and realized the hints were just inverted — too high said go higher, too low said go lower.
+The game loaded fine and I could type a number and click submit, so at first it seemed okay. But it was basically unwinnable.
 
-The second thing I caught was that the secret number seemed to be changing. I'd open the debug info, note the secret, submit a guess, and the secret would be different on the next turn. Turned out the code was converting the secret to a string on every even attempt, so the comparison was happening alphabetically instead of numerically. Like "9" > "50" comes out true alphabetically because "9" > "5", which is obviously wrong.
+**Bug 1 — Inverted hints:** I expected that if my guess was too high, the game would tell me to go lower. Instead it said "Go HIGHER!" every time I guessed above the secret. I guessed 80 when the secret was around 30, and it kept pushing me higher. I thought I was misreading it at first, but after a few rounds it was clear the hints were just completely backwards — too high said go higher, too low said go lower.
 
-The third one was the difficulty settings. I switched to Hard expecting it to be harder, but the range was 1–50, which is actually easier than Normal's 1–100. That was clearly a copy-paste mistake in the original code.
+**Bug 2 — Secret number changing mid-game:** I expected the secret to stay the same for the whole game. But every time I submitted a guess, the secret in the debug panel was different. Turned out the code was converting the secret to a string on every even attempt, so the comparison was happening alphabetically instead of numerically. "9" > "50" is true alphabetically because "9" > "5", which made the hints wrong on every other turn.
+
+**Bug 3 — Hard mode was easier than Normal:** I expected Hard to be harder than Normal — bigger range, harder to guess. Instead Hard had a range of 1–50 while Normal was 1–100, so switching to Hard actually made the game easier. That was clearly just a wrong value in the original code.
 
 ---
 
@@ -16,7 +18,7 @@ I used AI to help me trace through the bugs once I had a rough idea of where thi
 
 For the string coercion bug, I described the symptom — hints being correct on odd attempts but wrong on even ones — and the AI pointed me straight to the lines where the secret was getting cast to a string. It explained why that breaks numeric comparison, which confirmed what I suspected. That suggestion was spot on and saved me from digging through all the session state logic manually.
 
-Where the AI wasn't helpful was when I asked whether the Hard difficulty range was intentional. It tried to argue that maybe 1–50 was a "trick" hard mode where the smaller range is deceptively easy. That made no sense given how the game is described, so I ignored it and just set Hard to 1–200, which is what it should've been all along. That was a good reminder that AI will sometimes defend broken code instead of just admitting it's wrong.
+Where the AI wasn't helpful was when I asked whether the Hard difficulty range was intentional. It suggested that 1–50 could be a "trick" hard mode where a smaller range is deceptively simple. That suggestion was misleading — the game description clearly states that Hard should make guessing harder, not easier. I verified by checking the sidebar: after setting Hard to 1–200 the range displayed correctly, and the pytest test `test_hard_range_is_harder_than_normal` confirmed the returned range was wider than Normal's. The AI was rationalizing the bug rather than flagging it as one.
 
 ---
 
