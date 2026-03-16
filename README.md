@@ -27,22 +27,16 @@ It wrote the code, ran away, and now the game is unplayable.
 **Game purpose:** A number-guessing game where the player tries to identify a secret number within a limited number of attempts. Difficulty controls the range and attempt limit. The score decreases with each wrong guess and rewards winning quickly.
 
 **Bugs found:**
-1. **Inverted hints** — `check_guess` in `app.py` returned "Go HIGHER!" when the guess was too high and "Go LOWER!" when too low. The emoji and text both pointed the wrong direction.
-2. **String coercion of secret on even attempts** — `app.py` converted the integer secret to a string on every even attempt (`secret = str(st.session_state.secret)`), causing lexicographic comparison. `"9" > "50"` is `True` alphabetically but `False` numerically, so hints were wrong every other turn.
-3. **Hard difficulty easier than Normal** — `get_range_for_difficulty("Hard")` returned `(1, 50)` — a smaller range than Normal's `(1, 100)` — making Hard the easiest mode.
-4. **Attempts counter started at 1** — `st.session_state.attempts` initialized to `1` instead of `0`, so the first guess was counted as attempt 2, incorrectly reducing the displayed remaining attempts and skewing scoring.
-5. **Score rewarded wrong guesses on even attempts** — `update_score` gave `+5` points for "Too High" on even attempt numbers, rewarding incorrect answers.
-6. **`logic_utils.py` was all stubs** — Every function raised `NotImplementedError`; all logic lived in `app.py` with no separation of concerns.
-7. **New Game ignored difficulty range** — The New Game button always called `random.randint(1, 100)` regardless of the selected difficulty.
-8. **Info box hardcoded range** — The hint text always said "Guess a number between 1 and 100" even on Easy (1–20) or Hard (1–200).
+1. **Inverted hints** — the game told you to go higher when your guess was already too high, and lower when it was too low. Completely backwards.
+2. **Secret number changing mid-game** — the debug panel showed a different secret after each guess. Turned out the code was converting the secret to a string on certain attempts, so comparisons were happening alphabetically instead of numerically.
+3. **Hard mode was easier than Normal** — Hard had a range of 1–50, which is smaller than Normal's 1–100. Switching to Hard made the game easier.
+4. **Score math was off** — wrong guesses were sometimes rewarding points instead of deducting them, depending on which attempt number it was.
 
 **Fixes applied:**
-- Moved all game logic (`get_range_for_difficulty`, `parse_guess`, `check_guess`, `update_score`) into `logic_utils.py` with correct implementations.
-- Fixed `check_guess` to always compare integers and return the correct "Too High" / "Too Low" outcome.
+- Moved core logic into `logic_utils.py` and fixed the implementations there.
+- Fixed `check_guess` to compare integers correctly and return the right hint direction.
 - Fixed Hard difficulty range to `1–200`.
-- Fixed attempts to start at `0`.
-- Fixed `update_score` to always deduct points for wrong guesses regardless of attempt parity.
-- Fixed New Game and info box to use the difficulty-based `low`/`high` range.
+- Fixed `update_score` to always deduct points for wrong guesses.
 
 ## 📸 Demo
 

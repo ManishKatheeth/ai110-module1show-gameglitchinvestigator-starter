@@ -6,7 +6,7 @@ The game loaded fine and I could type a number and click submit, so at first it 
 
 **Bug 1 — Inverted hints:** I expected that if my guess was too high, the game would tell me to go lower. Instead it said "Go HIGHER!" every time I guessed above the secret. I guessed 80 when the secret was around 30, and it kept pushing me higher. I thought I was misreading it at first, but after a few rounds it was clear the hints were just completely backwards — too high said go higher, too low said go lower.
 
-**Bug 2 — Secret number changing mid-game:** I expected the secret to stay the same for the whole game. But every time I submitted a guess, the secret in the debug panel was different. Turned out the code was converting the secret to a string on every even attempt, so the comparison was happening alphabetically instead of numerically. "9" > "50" is true alphabetically because "9" > "5", which made the hints wrong on every other turn.
+**Bug 2 — Secret number changing mid-game:** I expected the secret to stay the same for the whole game. But when I opened the debug panel, the number kept being different after each guess. At first I thought I was imagining it. After a few more attempts it was clearly changing on me — which made the hints even more confusing since they were already backwards. I had to dig into the code with Copilot's help to figure out what was actually happening.
 
 **Bug 3 — Hard mode was easier than Normal:** I expected Hard to be harder than Normal — bigger range, harder to guess. Instead Hard had a range of 1–50 while Normal was 1–100, so switching to Hard actually made the game easier. That was clearly just a wrong value in the original code.
 
@@ -14,34 +14,34 @@ The game loaded fine and I could type a number and click submit, so at first it 
 
 ## 2. How did you use AI as a teammate?
 
-I used AI to help me trace through the bugs once I had a rough idea of where things were going wrong.
+I mostly used Copilot once I had a hunch about where something was going wrong, to help me confirm it or understand why.
 
-For the string coercion bug, I described the symptom — hints being correct on odd attempts but wrong on even ones — and the AI pointed me straight to the lines where the secret was getting cast to a string. It explained why that breaks numeric comparison, which confirmed what I suspected. That suggestion was spot on and saved me from digging through all the session state logic manually.
+For the changing secret bug, I described what I was seeing — the debug panel showing different numbers after each guess — and asked it to explain what was happening in the session state logic. It walked me through how the secret was being cast to a string on certain attempts, which is why the comparisons were off. That was genuinely useful. I wouldn't have spotted that on my own nearly as fast.
 
-Where the AI wasn't helpful was when I asked whether the Hard difficulty range was intentional. It suggested that 1–50 could be a "trick" hard mode where a smaller range is deceptively simple. That suggestion was misleading — the game description clearly states that Hard should make guessing harder, not easier. I verified by checking the sidebar: after setting Hard to 1–200 the range displayed correctly, and the pytest test `test_hard_range_is_harder_than_normal` confirmed the returned range was wider than Normal's. The AI was rationalizing the bug rather than flagging it as one.
+One place where it wasn't helpful: I asked whether the Hard difficulty range being smaller than Normal was maybe intentional (like a design choice). It actually tried to justify it — said something like a tighter range could be a different kind of challenge. I almost went with that, but it didn't make sense with how the game described Hard mode. So I just changed it to 1–200 and wrote a test to make sure Hard's range is actually wider than Normal's. The AI was kind of making excuses for the bug instead of calling it one, which was a good reminder to trust the spec over the explanation.
 
 ---
 
 ## 3. Debugging and testing your fixes
 
-After fixing the inverted hints, I wrote two tests specifically to catch that — one checking that a guess of 1 against a secret of 100 returns "Too Low", and one checking that 100 against 1 returns "Too High". Before the fix those would've returned the opposite. Running pytest confirmed they passed after the fix.
+For the inverted hints, I wrote a couple of tests — one where the guess is way below the secret and one where it's way above — to make sure the right outcome came back. Honestly I wasn't sure if the tests were going to be enough at first, so I also just played through a few rounds manually after fixing it to double-check it felt right.
 
-For the string coercion issue, I wrote a test using `check_guess(9, 50)` — because 9 < 50 numerically but "9" > "5" alphabetically. That specific case would have returned "Too High" in the broken code. After moving the logic into `logic_utils.py` with proper integer comparison, it correctly returned "Too Low".
+For the secret-changing bug, Copilot helped me write a test for the specific case where the guess is 9 and the secret is 50. That case would return the wrong answer in the broken code because of how string comparison works. Once the logic was moved into `logic_utils.py` and using regular integer comparison, it passed.
 
-I also just played the game a bunch after each fix to make sure it felt right. The hints now actually lead you to the answer, the score goes down when you guess wrong, and switching to Hard gives you a much bigger range to work with.
+I ran pytest after each fix and also just played the game. The hints now actually point you in the right direction, which sounds obvious but was clearly not the case before.
 
 ---
 
 ## 4. What did you learn about Streamlit and state?
 
-The secret number changing every turn threw me off at first. I didn't realize Streamlit reruns the entire script from scratch every time you interact with anything — click a button, type in a box, doesn't matter. So any variable you define at the top of the file just gets reset on every interaction.
+The changing secret thing really confused me because I didn't know how Streamlit worked. I had used it a little before but not enough to know that it re-runs the whole script every single time you click anything. So every time I clicked Submit, the secret was getting regenerated at the top of the file.
 
-`st.session_state` is what keeps values alive across those reruns. The fix was wrapping the secret assignment in an `if "secret" not in st.session_state:` check so it only generates a new number the very first time, and leaves it alone after that. Same thing for attempts, score, and history. Once I understood that reruns were the root cause, everything else made more sense.
+Once I looked it up and understood that, the fix made sense — you have to store anything you want to keep in `st.session_state` and check if it already exists before setting it. That way it only gets created once. It's a pretty different mental model from regular Python scripts, which caught me off guard.
 
 ---
 
 ## 5. Looking ahead: your developer habits
 
-The most useful thing I did was write the tests before fully fixing the bugs — or at least right after confirming the broken behavior. Having a failing test that described exactly what was wrong made it easy to know when the fix actually worked, and it caught a couple of cases where I thought I'd fixed something but hadn't quite.
+I want to get better about writing tests earlier in the process. I usually wrote them after I was pretty sure the fix worked, which meant a couple times I thought something was fixed and then the test showed it wasn't quite right. Writing the test first and watching it fail before fixing would have made that cleaner.
 
-I'd also be more careful about accepting AI suggestions on logic-heavy code. For straightforward stuff like "find where this variable is assigned," it's great. But when I asked it to evaluate whether a design decision was intentional, it just kind of rationalized the broken behavior instead of questioning it. Going forward I'd ask it to explain code rather than judge whether it's correct — that seems to be where it's actually reliable.
+The AI thing I'll carry forward is being more skeptical when it explains a decision rather than questioning it. It was helpful for "show me where this variable gets set" but less helpful for "is this behavior intentional" — it tends to come up with a reason why the broken thing might make sense, which isn't what you need when debugging.
