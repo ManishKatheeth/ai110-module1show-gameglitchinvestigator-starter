@@ -70,7 +70,6 @@ st.info(
 )
 
 with st.expander("Developer Debug Info"):
-    st.write("Secret:", st.session_state.secret)
     st.write("Attempts:", st.session_state.attempts)
     st.write("Score:", st.session_state.score)
     st.write("Difficulty:", difficulty)
